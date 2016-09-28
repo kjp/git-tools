@@ -1,7 +1,10 @@
 #!/bin/sh
 
+# Source: https://raw.githubusercontent.com/git/git/master/contrib/workdir/git-new-workdir
+# Adjusted by K. Potamianos <karolos.potamianos@cern.ch> to support no checkout (for sparse checkouts)
+
 usage () {
-	echo "usage:" $@
+	echo "usage:" "$@"
 	exit 127
 }
 
@@ -14,9 +17,25 @@ failed () {
 	die "unable to create new workdir '$new_workdir'!"
 }
 
+# Processing options first
+no_checkout=false
+if test "$1" = "--no-checkout"
+then
+        no_checkout=true
+        shift
+fi
+
+sparse=false
+if test "$1" = "--sparse"
+then
+        sparse=true
+        shift
+fi
+
 if test $# -lt 2 || test $# -gt 3
 then
-	usage "$0 <repository> <new_workdir> [<branch>]"
+	usage "git new-workdir [options] <repository> <new_workdir> [<branch>] 
+       --no-checkout: skips checking out a branch in the new workdir"
 fi
 
 orig_git=$1
@@ -100,6 +119,23 @@ cp "$git_dir/HEAD" .git/HEAD || failed
 # the workdir is set up.  if the checkout fails, the user can fix it.
 trap - $siglist
 
+# offer the possibility to edit the .git/info/sparse-checkout
+if test z$sparse = ztrue
+then
+        rm "$new_workdir/.git/info"
+        rsync -aP "$git_dir/info/" "$new_workdir/.git/info/" 2>&1 >/dev/null
+        if test -e ${EDITOR/ *}
+        then
+              $EDITOR .git/info/sparse-checkout
+        else
+              echo "EDITOR is not set, please edit .git/info/sparse-checkout by hand"
+        fi
+fi
 # checkout the branch (either the same as HEAD from the original repository,
 # or the one that was asked for)
-git checkout -f $branch
+if test z$no_checkout = zfalse
+then
+        git checkout -f $branch
+else
+        echo "Skipping the checkout as requested."
+fi
