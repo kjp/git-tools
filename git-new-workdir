@@ -18,6 +18,7 @@ failed () {
 }
 
 # Processing options first
+# Todo: allow for --sparse to be specified before --no-checkout
 no_checkout=false
 if test "$1" = "--no-checkout"
 then
@@ -35,7 +36,9 @@ fi
 if test $# -lt 2 || test $# -gt 3
 then
 	usage "git new-workdir [options] <repository> <new_workdir> [<branch>] 
-       --no-checkout: skips checking out a branch in the new workdir"
+       --no-checkout: skips checking out a branch in the new workdir 
+       --sparse: copies over the contents of the repository's .git/info/sparse-checkout 
+                 (and other files from .git/info) and prompts the user to modify the sparse-checkout file"
 fi
 
 orig_git=$1
