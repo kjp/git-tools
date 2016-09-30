@@ -1,0 +1,96 @@
+#!/bin/sh
+
+# Author: K. Potamianos <karolos.potamianos@cern.ch>
+# Date: 2016-IX-29
+
+cmd=${1}
+path=${2}
+
+function usage() {
+  echo "usage: git sparse-checkout add path"
+  echo "       git sparse-checkout addpkg package_name"
+  echo "       git sparse-checkout list"
+  echo "       git sparse-checkout rm regex"
+  echo "       git sparse-checkout rmpkg package_name"
+  exit 1
+}
+
+function die() {
+  echo "$@"
+  exit 128
+}
+
+
+if test $# -lt 1
+then
+  usage
+fi
+
+if test "$cmd" != "list" -a $# -lt 2
+then
+  usage
+fi
+
+git_dir=$(git rev-parse --show-toplevel)/.git
+
+pkg_path=
+
+function get_sparse_checkout_file() {
+  if test -d ${git_dir}
+  then # It's the standard case (or git-new-workdir copy)
+    echo ${git_dir}/info/sparse-checkout
+  elif test -f ${git_dir}
+  then # It's a worktree working copy
+    echo `cat ${git_dir} | sed 's/gitdir: //'`/info/sparse-checkout 
+  fi
+}
+
+# Check whether path exists in git-ls-files (otherwise it makes no sense to add it)
+function check_path_in_repo() {
+  git-ls-files | grep -m 1 '/^${path}/' && die "Error: ${path} not found in repository"
+}
+
+# Find 'package' in files known to git
+function find_pkg() {
+  pkg_path=`git ls-files | grep /${path}/ | sed "s@/${path}/.*@/${path}/@" | sort -u`
+  #echo find_pkg: ${pkg_path}
+  test -n "${pkg_path}" || die "Error: no pakage named ${path} found in repository."
+}
+
+function add_path() {
+  paths="${@}"
+  for path in ${paths}
+  do
+    grep -m 1 "^${path}\$" ${sparse_checkout_file} && die "Error: ${path} already in sparse-checkout file"
+    check_path_in_repo
+    echo ${path} >> ${sparse_checkout_file}
+    test -n $verbose && echo "${path} added to sparse checkout"
+  done
+
+}
+
+function rm_path() {
+  paths="${@}"
+  for path in ${paths}
+  do
+    grep "^${path}\$" ${sparse_checkout_file} > /dev/null || die "Error: ${path} not in sparse-checkout file"
+    sed -i "\|^${path}\$|d" ${sparse_checkout_file}
+    test -n $verbose && echo "${path} removed to sparse checkout"
+  done
+}
+
+function list_paths() {
+  echo "Content of sparse-checkout file:"
+  cat ${sparse_checkout_file}
+}
+
+sparse_checkout_file=`get_sparse_checkout_file`
+
+case ${cmd} in
+ add)    add_path "${path}" ;;
+ addpkg) find_pkg && add_path "${pkg_path}" ;;
+ list)   list_paths;;
+ rm)     rm_path "${path}" ;;
+ rmpkg) find_pkg && rm_path "${pkg_path}" ;;
+ *)      usage ;;
+esac
